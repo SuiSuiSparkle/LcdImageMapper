@@ -171,7 +171,6 @@ def build_result_text(
     lines = []
     if source_name:
         lines.append(f"/* Source: {source_name} */")
-    lines.append("#include <stdint.h>")
     lines.append("")
     lines.append(f"#define {width_macro} {padded_width}")
     lines.append(f"#define {height_macro} {padded_height}")

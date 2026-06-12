@@ -395,7 +395,6 @@ QString MainWindow::buildHeaderText(const QByteArray &bytes, int paddedWidthValu
 {
     QString header;
     header += QStringLiteral("#pragma once\n\n");
-    header += QStringLiteral("#include <stdint.h>\n\n");
     header += QStringLiteral("#define IMG_WIDTH %1\n").arg(paddedWidthValue);
     header += QStringLiteral("#define IMG_HEIGHT %1\n").arg(paddedHeightValue);
     header += QStringLiteral("#define IMG_BYTES %1\n\n").arg(bytes.size());
