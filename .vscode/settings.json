@@ -1,0 +1,10 @@
+{
+  "cmake.configureOnOpen": true,
+  "cmake.sourceDirectory": "${workspaceFolder}",
+  "cmake.buildDirectory": "${workspaceFolder}/build",
+  "C_Cpp.intelliSenseEngine": "default",
+  "C_Cpp.default.cppStandard": "c++17",
+  "[cpp]": {
+    "editor.defaultFormatter": "ms-vscode.cpptools"
+  }
+}

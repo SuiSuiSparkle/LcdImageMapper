@@ -1,0 +1,39 @@
+{
+  "configurations": [
+    {
+      "name": "Windows",
+      "includePath": [
+        "${workspaceFolder}/src",
+        "${workspaceFolder}/build",
+        "E:/QT/6.10.2/mingw_64/include",
+        "E:/QT/6.10.2/mingw_64/include/QtWidgets",
+        "E:/QT/6.10.2/mingw_64/include/QtCore",
+        "E:/QT/6.10.2/mingw_64/include/QtGui",
+        "E:/QT/6.10.2/mingw_64/include/QtCore/6.10.2/QtCore/private",
+        "${workspaceFolder}/build/ImageTool_autogen/include"
+      ],
+      "defines": [
+        "_DEBUG",
+        "UNICODE",
+        "_UNICODE",
+        "QT_WIDGETS_LIB",
+        "QT_CORE_LIB",
+        "QT_GUI_LIB"
+      ],
+      "cStandard": "c17",
+      "cppStandard": "c++17",
+      "intelliSenseEngine": "default",
+      "compilerPath": "cl.exe",
+      "compilerArgs": [],
+      "browse": {
+        "path": [
+          "${workspaceFolder}",
+          "${workspaceFolder}/src",
+          "${workspaceFolder}/build"
+        ],
+        "limitSymbolsToIncludedHeaders": true
+      }
+    }
+  ],
+  "version": 4
+}
