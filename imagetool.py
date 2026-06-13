@@ -1,5 +1,14 @@
-#!/usr/bin/env python3
-"""ImageTool - 图像取模工具。"""
+#!/usr/bin/en, python3
+"""
+ImageTool - 图像取模工具。
+
+将 PNG/JPG/BMP 图像转换为嵌入式 C 数组（位图取模）。
+支持单张图片和文件夹批处理两种模式，提供二值化预览、
+扫描方向/位顺序配置、复制、导出等完整工作流。
+
+Usage:
+    python imagetool.py
+"""
 
 from __future__ import annotations
 
@@ -14,7 +23,7 @@ os.environ.setdefault("QT_OPENGL", "desktop")
 
 import numpy as np
 from PIL import Image
-from PyQt6.QtCore import QCoreApplication, QObject, QThread, Qt, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import QCoreApplication, QObject, QThread, Qt, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QImage, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
@@ -41,8 +50,15 @@ from PyQt6.QtWidgets import (
 SUPPORTED_IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp"}
 
 
+# ---------------------------------------------------------------------------
+# 数据模型
+# ---------------------------------------------------------------------------
+
+
 @dataclass
 class BatchResult:
+    """单张图片的批处理结果，包含原始/补齐尺寸、二进制数据和 C 数组文本。"""
+
     index: int
     source_path: str
     file_name: str
@@ -56,6 +72,8 @@ class BatchResult:
 
 
 class BatchNode:
+    """双向链表节点，包装 BatchResult。"""
+
     def __init__(self, data: BatchResult):
         self.data = data
         self.prev: Optional[BatchNode] = None
@@ -63,6 +81,8 @@ class BatchNode:
 
 
 class DoublyLinkedResultList:
+    """按插入顺序维护批处理结果的双向链表，支持按序号 O(n) 查找。"""
+
     def __init__(self):
         self.head: Optional[BatchNode] = None
         self.tail: Optional[BatchNode] = None
@@ -104,6 +124,7 @@ class DoublyLinkedResultList:
 
 
 def sanitize_identifier(text: str) -> str:
+    """将文件名转换为合法的 C 标识符（替换特殊字符为下划线）。"""
     cleaned = "".join(char if char.isalnum() else "_" for char in text).strip("_")
     if not cleaned:
         cleaned = "image"
@@ -113,33 +134,46 @@ def sanitize_identifier(text: str) -> str:
 
 
 def compute_padded_size(width: int, height: int) -> tuple[int, int]:
+    """将宽高补齐到 8 的倍数（硬件位图对齐要求）。"""
     return ((width + 7) // 8) * 8, ((height + 7) // 8) * 8
 
 
 def read_grayscale_image(file_path: str) -> tuple[np.ndarray, int, int]:
+    """读取图像并转为灰度一维数组。返回 (像素数组, 宽, 高)。"""
     image = Image.open(file_path).convert("L")
     gray_pixels = np.array(image, dtype=np.uint8).reshape(-1)
     return gray_pixels, image.width, image.height
 
 
-def build_binary_matrix(gray_pixels: np.ndarray, image_width: int, image_height: int, threshold: int) -> tuple[int, int, np.ndarray]:
+def build_binary_matrix(
+    gray_pixels: np.ndarray, image_width: int, image_height: int, threshold: int
+) -> tuple[int, int, np.ndarray]:
+    """基于阈值对灰度图做二值化，返回补齐后的二值矩阵。
+
+    使用 NumPy 向量化比较（gray >= threshold），避免逐像素 Python 循环。
+    """
     padded_width, padded_height = compute_padded_size(image_width, image_height)
     if padded_width <= 0 or padded_height <= 0:
         return 0, 0, np.zeros((0, 0), dtype=np.uint8)
 
-    # Vectorized thresholding avoids Python-level pixel loops.
     gray_2d = gray_pixels.reshape((image_height, image_width))
     binary = np.zeros((padded_height, padded_width), dtype=np.uint8)
     binary[:image_height, :image_width] = (gray_2d >= threshold).astype(np.uint8)
     return padded_width, padded_height, binary
 
 
-def pack_binary_matrix(binary_matrix: np.ndarray, horizontal: bool, msb_first: bool) -> bytearray:
+def pack_binary_matrix(
+    binary_matrix: np.ndarray, horizontal: bool, msb_first: bool
+) -> bytearray:
+    """将二值矩阵按位打包为字节数组。
+
+    - horizontal=True: 逐行扫描；False: 逐列扫描。
+    - msb_first=True: 高位在前；False: 低位在前。
+    使用 np.packbits 在 C 层完成打包，远快于 Python 位循环。
+    """
     if binary_matrix.size == 0:
         return bytearray()
 
-    # np.packbits handles the byte packing in native C code, which is much
-    # faster than a nested Python loop.
     work_matrix = binary_matrix if horizontal else binary_matrix.T
     bitorder = "big" if msb_first else "little"
     packed = np.packbits(work_matrix, axis=1, bitorder=bitorder)
@@ -147,10 +181,13 @@ def pack_binary_matrix(binary_matrix: np.ndarray, horizontal: bool, msb_first: b
 
 
 def format_bytes_per_line(bytes_array: bytearray) -> str:
+    """将字节数组格式化为每行 16 字节的 C 风格注释文本。"""
     lines = []
     for index in range(0, len(bytes_array), 16):
         line_end = min(index + 16, len(bytes_array))
-        line_bytes = ", ".join(f"0x{value:02x}" for value in bytes_array[index:line_end])
+        line_bytes = ", ".join(
+            f"0x{value:02x}" for value in bytes_array[index:line_end]
+        )
         line = f"    /* 0x{index:04x} */ {line_bytes}"
         if line_end < len(bytes_array):
             line += ","
@@ -168,6 +205,7 @@ def build_result_text(
     bytes_macro: str,
     source_name: Optional[str] = None,
 ) -> str:
+    """构建完整的 C 数组文本输出（宏定义 + 数组声明 + 格式化数据）。"""
     lines = []
     if source_name:
         lines.append(f"/* Source: {source_name} */")
@@ -185,6 +223,10 @@ def build_result_text(
 
 
 def validate_image_folder(folder_path: str) -> tuple[Optional[str], list[Path]]:
+    """验证批处理文件夹：必须只包含同类型支持的图片。
+
+    返回 (错误消息或None, 图片文件列表)。
+    """
     folder = Path(folder_path)
     if not folder.exists() or not folder.is_dir():
         return "Selected path is not a folder.", []
@@ -211,6 +253,8 @@ def validate_image_folder(folder_path: str) -> tuple[Optional[str], list[Path]]:
 
 
 class PreviewWidget(QFrame):
+    """二值点阵预览控件，以方格形式绘制二进制图像。"""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumSize(360, 360)
@@ -263,9 +307,14 @@ class PreviewWidget(QFrame):
 
 
 class BatchWorker(QObject):
-    progress = pyqtSignal(int, int, str)
-    finished = pyqtSignal(object)
-    failed = pyqtSignal(str)
+    """后台工作线程对象，逐张处理文件夹中的图片并生成 BatchResult。
+
+    通过 progress/finished/failed 信号与主线程通信，避免 UI 冻结。
+    """
+
+    progress = pyqtSignal(int, int, str)  # (current, total, file_name)
+    finished = pyqtSignal(object)  # DoublyLinkedResultList
+    failed = pyqtSignal(str)  # error message
 
     def __init__(self, folder_path: str, threshold: int, horizontal: bool, msb_first: bool):
         super().__init__()
@@ -321,6 +370,12 @@ class BatchWorker(QObject):
 
 
 class ImageToolWindow(QMainWindow):
+    """主窗口，承载全部 UI 和交互逻辑。
+
+    单图模式：Open Image → 调整参数 → Generate/Copy/Save
+    批处理模式：Open Folder → 后台处理 → 导航/播放 → Export TXT
+    """
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("ImageTool - Bitmap Generator")
@@ -340,6 +395,9 @@ class ImageToolWindow(QMainWindow):
         self.batch_processing = False
         self._batch_thread: Optional[QThread] = None
         self._batch_worker: Optional[BatchWorker] = None
+
+        self.play_timer = QTimer(self)
+        self.play_timer.setInterval(67)  # 默认 15 FPS（1000/15 ≈ 67ms）
 
         self.build_ui()
 
@@ -455,6 +513,46 @@ class ImageToolWindow(QMainWindow):
         batch_select_row.addWidget(self.batch_file_label, 1)
         batch_layout.addLayout(batch_select_row)
 
+        # --- Navigation bar: Prev | Play | Next ---
+        nav_row = QHBoxLayout()
+        nav_row.setSpacing(8)
+
+        self.prev_button = QPushButton("◀ Prev")
+        self.prev_button.setMinimumHeight(36)
+        self.prev_button.setEnabled(False)
+
+        self.play_button = QPushButton("▶ Play")
+        self.play_button.setMinimumHeight(36)
+        self.play_button.setEnabled(False)
+
+        self.next_button = QPushButton("Next ▶")
+        self.next_button.setMinimumHeight(36)
+        self.next_button.setEnabled(False)
+
+        self.prev_button.clicked.connect(self.navigate_previous)
+        self.play_button.clicked.connect(self.toggle_playback)
+        self.next_button.clicked.connect(self.navigate_next)
+        self.play_timer.timeout.connect(self.navigate_next)
+
+        nav_row.addWidget(self.prev_button)
+        nav_row.addWidget(self.play_button)
+        nav_row.addWidget(self.next_button)
+
+        # FPS 帧率调节
+        nav_row.addStretch()
+        fps_label = QLabel("FPS")
+        self.fps_spin = QSpinBox()
+        self.fps_spin.setRange(1, 60)
+        self.fps_spin.setValue(15)
+        self.fps_spin.setMinimumWidth(52)
+        self.fps_spin.setToolTip("自动播放帧率（每秒切换图片数）")
+        self.fps_spin.valueChanged.connect(self.on_fps_changed)
+        nav_row.addWidget(fps_label)
+        nav_row.addWidget(self.fps_spin)
+
+        batch_layout.addLayout(nav_row)
+        # --- End navigation bar ---
+
         delimiter_row = QHBoxLayout()
         delimiter_row.addWidget(QLabel("Delimiter"))
         self.delimiter_edit = QLineEdit("\n\n-----\n\n")
@@ -491,6 +589,10 @@ class ImageToolWindow(QMainWindow):
         main_layout.addWidget(right_panel, 1)
 
     def set_processing_state(self, busy: bool, message: str = ""):
+        """统一管理 UI 控件的启用/禁用状态。
+
+        busy=True 时禁用交互控件并显示进度，防止用户重复操作。
+        """
         self.batch_processing = busy
         self.batch_progress.setVisible(busy)
         self.batch_progress.setValue(0 if busy else 100)
@@ -502,6 +604,11 @@ class ImageToolWindow(QMainWindow):
         self.save_button.setEnabled(not busy)
         self.export_txt_button.setEnabled(not busy and self.batch_mode)
         self.sequence_spin.setEnabled(not busy and self.batch_mode and self.batch_results.length > 0)
+        has_batch = self.batch_mode and self.batch_results.length > 0
+        self.prev_button.setEnabled(not busy and has_batch)
+        self.play_button.setEnabled(not busy and has_batch and self.batch_results.length >= 2)
+        self.next_button.setEnabled(not busy and has_batch)
+        self.fps_spin.setEnabled(not busy and has_batch)
 
     def open_image(self):
         file_path, _ = QFileDialog.getOpenFileName(
@@ -514,11 +621,19 @@ class ImageToolWindow(QMainWindow):
             self.batch_mode = False
             self.batch_folder = ""
             self.batch_results.clear()
+            # Stop any running playback
+            if self.play_timer.isActive():
+                self.play_timer.stop()
+                self.play_button.setText("▶ Play")
             self.sequence_spin.blockSignals(True)
             self.sequence_spin.setMaximum(1)
             self.sequence_spin.setValue(1)
             self.sequence_spin.setEnabled(False)
             self.sequence_spin.blockSignals(False)
+            self.prev_button.setEnabled(False)
+            self.play_button.setEnabled(False)
+            self.next_button.setEnabled(False)
+            self.fps_spin.setEnabled(False)
             self.batch_status_label.setText("Batch: not loaded")
             self.batch_file_label.setText("-")
             self.batch_progress.setVisible(False)
@@ -551,6 +666,10 @@ class ImageToolWindow(QMainWindow):
         self.batch_mode = True
         self.batch_folder = folder_path
         self.batch_results.clear()
+        # Stop any running playback before reprocessing
+        if self.play_timer.isActive():
+            self.play_timer.stop()
+            self.play_button.setText("▶ Play")
         self.set_processing_state(True, f"Batch: processing {len(image_files)} images...")
 
         scan_horizontal = self.horizontal_radio.isChecked()
@@ -640,7 +759,77 @@ class ImageToolWindow(QMainWindow):
 
     def on_batch_sequence_changed(self, value: int):
         if self.batch_mode and not self.batch_processing:
+            # Stop playback when user manually changes sequence via spinbox
+            if self.play_timer.isActive():
+                self.play_timer.stop()
+                self.play_button.setText("▶ Play")
             self.select_batch_result(value)
+
+    # ------------------------------------------------------------------
+    # 批处理导航与自动播放
+    # ------------------------------------------------------------------
+
+    def on_fps_changed(self, fps: int):
+        """根据 FPS 值更新播放定时器间隔（毫秒）。
+
+        定时器活跃时立即生效：停止后以新间隔重新启动。
+        """
+        interval_ms = max(1, 1000 // fps)
+        was_active = self.play_timer.isActive()
+        if was_active:
+            self.play_timer.stop()
+        self.play_timer.setInterval(interval_ms)
+        if was_active:
+            self.play_timer.start()
+
+    def navigate_previous(self):
+        """Go to the previous batch result (stops playback)."""
+        if not self.batch_mode or self.batch_results.length == 0:
+            return
+        # Stop playback on manual navigation
+        if self.play_timer.isActive():
+            self.play_timer.stop()
+            self.play_button.setText("▶ Play")
+        new_val = max(1, self.sequence_spin.value() - 1)
+        if new_val != self.sequence_spin.value():
+            # Block spinbox signals to avoid on_batch_sequence_changed stopping the timer
+            self.sequence_spin.blockSignals(True)
+            self.sequence_spin.setValue(new_val)
+            self.sequence_spin.blockSignals(False)
+            self.select_batch_result(new_val)
+
+    def navigate_next(self):
+        """Go to the next batch result (loops back to first at end).
+
+        When triggered by the play timer, does NOT stop playback.
+        When triggered by manual button click, stops playback.
+        """
+        if not self.batch_mode or self.batch_results.length == 0:
+            return
+        # Only stop if manually clicked (not timer-triggered)
+        manual_click = self.sender() == self.next_button
+        if manual_click and self.play_timer.isActive():
+            self.play_timer.stop()
+            self.play_button.setText("▶ Play")
+        new_val = self.sequence_spin.value() + 1
+        if new_val > self.batch_results.length:
+            new_val = 1  # Loop back to first
+        # Block spinbox signals to avoid on_batch_sequence_changed stopping the timer
+        self.sequence_spin.blockSignals(True)
+        self.sequence_spin.setValue(new_val)
+        self.sequence_spin.blockSignals(False)
+        self.select_batch_result(new_val)
+
+    def toggle_playback(self):
+        """Start or stop automatic cycling through batch results."""
+        if not self.batch_mode or self.batch_results.length < 2:
+            return
+        if self.play_timer.isActive():
+            self.play_timer.stop()
+            self.play_button.setText("▶ Play")
+        else:
+            self.play_timer.start()
+            self.play_button.setText("⏸ Pause")
 
     def select_batch_result(self, sequence: int):
         result = self.batch_results.get(sequence)

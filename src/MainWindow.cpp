@@ -5,8 +5,10 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QColor>
+#include <QDir>
 #include <QFile>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QFrame>
 #include <QGridLayout>
 #include <QGroupBox>
@@ -23,6 +25,7 @@
 #include <QSlider>
 #include <QStandardPaths>
 #include <QTextEdit>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -123,6 +126,11 @@ void MainWindow::buildUi()
     openButton->setMinimumHeight(36);
     leftLayout->addWidget(openButton);
 
+    auto *openFolderBtn = new QPushButton(QStringLiteral("Open Folder"), leftPanel);
+    openFolderBtn->setMinimumHeight(36);
+    leftLayout->addWidget(openFolderBtn);
+    openFolderButton_ = openFolderBtn;
+
     originalImageLabel_ = new QLabel(leftPanel);
     originalImageLabel_->setMinimumSize(420, 420);
     originalImageLabel_->setAlignment(Qt::AlignCenter);
@@ -130,6 +138,27 @@ void MainWindow::buildUi()
     originalImageLabel_->setText(QStringLiteral("Original image preview"));
     originalImageLabel_->setStyleSheet(QStringLiteral("background:#fafafa; color:#666;"));
     leftLayout->addWidget(originalImageLabel_, 1);
+
+    // --- Navigation bar: Prev | Play | Next ---
+    auto *navRow = new QHBoxLayout();
+    navRow->setSpacing(8);
+
+    prevButton_ = new QPushButton(QStringLiteral("◀ Prev"), leftPanel);
+    prevButton_->setMinimumHeight(36);
+    prevButton_->setEnabled(false);
+
+    playButton_ = new QPushButton(QStringLiteral("▶ Play"), leftPanel);
+    playButton_->setMinimumHeight(36);
+    playButton_->setEnabled(false);
+
+    nextButton_ = new QPushButton(QStringLiteral("Next ▶"), leftPanel);
+    nextButton_->setMinimumHeight(36);
+    nextButton_->setEnabled(false);
+
+    navRow->addWidget(prevButton_);
+    navRow->addWidget(playButton_);
+    navRow->addWidget(nextButton_);
+    leftLayout->addLayout(navRow);
 
     auto *rightPanel = new QWidget(central);
     auto *rightLayout = new QVBoxLayout(rightPanel);
@@ -196,6 +225,10 @@ void MainWindow::buildUi()
     setCentralWidget(central);
 
     connect(openButton, &QPushButton::clicked, this, &MainWindow::openImage);
+    connect(openFolderBtn, &QPushButton::clicked, this, &MainWindow::openFolder);
+    connect(prevButton_, &QPushButton::clicked, this, &MainWindow::navigatePrevious);
+    connect(playButton_, &QPushButton::clicked, this, &MainWindow::togglePlayback);
+    connect(nextButton_, &QPushButton::clicked, this, &MainWindow::navigateNext);
     connect(thresholdSlider_, &QSlider::valueChanged, this, &MainWindow::onThresholdChanged);
     connect(generateButton_, &QPushButton::clicked, this, &MainWindow::generateBitmap);
     connect(copyButton_, &QPushButton::clicked, this, &MainWindow::copyBitmap);
@@ -244,6 +277,125 @@ void MainWindow::loadImage(const QString &filePath)
         originalImageLabel_->size(), Qt::KeepAspectRatio, Qt::SmoothTransformation));
 
     updateBinaryAndPreview();
+}
+
+void MainWindow::openFolder()
+{
+    const QString dirPath = QFileDialog::getExistingDirectory(this, QStringLiteral("Open Folder"), QString());
+    if (dirPath.isEmpty()) {
+        return;
+    }
+
+    QDir dir(dirPath);
+    QStringList filters;
+    filters << QStringLiteral("*.png") << QStringLiteral("*.jpg") << QStringLiteral("*.jpeg") << QStringLiteral("*.bmp");
+    dir.setNameFilters(filters);
+    dir.setSorting(QDir::Name);
+
+    imageFiles_.clear();
+    const QFileInfoList entries = dir.entryInfoList(QDir::Files);
+    for (const QFileInfo &info : entries) {
+        imageFiles_.append(info.absoluteFilePath());
+    }
+
+    if (imageFiles_.isEmpty()) {
+        QMessageBox::information(this, QStringLiteral("No Images"),
+            QStringLiteral("No supported image files found in the selected folder."));
+        prevButton_->setEnabled(false);
+        playButton_->setEnabled(false);
+        nextButton_->setEnabled(false);
+        return;
+    }
+
+    // Stop any current playback
+    if (playbackTimer_ && playbackTimer_->isActive()) {
+        playbackTimer_->stop();
+        playButton_->setText(QStringLiteral("▶ Play"));
+    }
+
+    currentImageIndex_ = 0;
+    loadImage(imageFiles_.at(currentImageIndex_));
+
+    prevButton_->setEnabled(true);
+    playButton_->setEnabled(true);
+    nextButton_->setEnabled(true);
+    updateNavButtonStates();
+}
+
+void MainWindow::togglePlayback()
+{
+    if (imageFiles_.isEmpty() || imageFiles_.size() < 2) {
+        return;
+    }
+
+    if (!playbackTimer_) {
+        playbackTimer_ = new QTimer(this);
+        playbackTimer_->setInterval(1500);
+        connect(playbackTimer_, &QTimer::timeout, this, &MainWindow::navigateNext);
+    }
+
+    if (playbackTimer_->isActive()) {
+        playbackTimer_->stop();
+        playButton_->setText(QStringLiteral("▶ Play"));
+    } else {
+        playbackTimer_->start();
+        playButton_->setText(QStringLiteral("⏸ Pause"));
+    }
+}
+
+void MainWindow::navigatePrevious()
+{
+    if (imageFiles_.isEmpty()) {
+        return;
+    }
+
+    // Stop playback on manual navigation
+    if (playbackTimer_ && playbackTimer_->isActive()) {
+        playbackTimer_->stop();
+        playButton_->setText(QStringLiteral("▶ Play"));
+    }
+
+    if (currentImageIndex_ > 0) {
+        currentImageIndex_--;
+        loadImage(imageFiles_.at(currentImageIndex_));
+    }
+    updateNavButtonStates();
+}
+
+void MainWindow::navigateNext()
+{
+    if (imageFiles_.isEmpty()) {
+        return;
+    }
+
+    // Stop playback only on manual button click, not timer-triggered
+    const bool manualClick = (sender() == nextButton_);
+
+    int newIndex = currentImageIndex_;
+    if (currentImageIndex_ < imageFiles_.size() - 1) {
+        newIndex = currentImageIndex_ + 1;
+    } else {
+        // Loop back to first image
+        newIndex = 0;
+    }
+
+    if (manualClick && playbackTimer_ && playbackTimer_->isActive()) {
+        playbackTimer_->stop();
+        playButton_->setText(QStringLiteral("▶ Play"));
+    }
+
+    if (newIndex != currentImageIndex_) {
+        currentImageIndex_ = newIndex;
+        loadImage(imageFiles_.at(currentImageIndex_));
+    }
+    updateNavButtonStates();
+}
+
+void MainWindow::updateNavButtonStates()
+{
+    const bool hasFiles = !imageFiles_.isEmpty();
+    prevButton_->setEnabled(hasFiles && currentImageIndex_ > 0);
+    nextButton_->setEnabled(hasFiles && imageFiles_.size() > 1);
 }
 
 void MainWindow::onThresholdChanged(int value)

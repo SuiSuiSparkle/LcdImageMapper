@@ -212,6 +212,7 @@ E:/ImageTool/build/ImageTool_autogen/UVLADIE3JM/moc_MainWindow.cpp: E:/ImageTool
   D:/Download/mingw64/x86_64-w64-mingw32/include/wctype.h \
   E:/QT/6.10.2/mingw_64/include/QtCore/QByteArray \
   E:/QT/6.10.2/mingw_64/include/QtCore/QString \
+  E:/QT/6.10.2/mingw_64/include/QtCore/QStringList \
   E:/QT/6.10.2/mingw_64/include/QtCore/QVector \
   E:/QT/6.10.2/mingw_64/include/QtCore/q17memory.h \
   E:/QT/6.10.2/mingw_64/include/QtCore/q20functional.h \

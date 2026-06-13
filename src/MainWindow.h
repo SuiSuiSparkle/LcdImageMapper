@@ -5,6 +5,7 @@
 #include <QByteArray>
 #include <QMainWindow>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 
 class QLabel;
@@ -12,6 +13,7 @@ class QPushButton;
 class QRadioButton;
 class QSlider;
 class QTextEdit;
+class QTimer;
 class QWidget;
 
 class MainWindow : public QMainWindow
@@ -23,6 +25,10 @@ public:
 
 private slots:
     void openImage();
+    void openFolder();
+    void togglePlayback();
+    void navigatePrevious();
+    void navigateNext();
     void onThresholdChanged(int value);
     void generateBitmap();
     void copyBitmap();
@@ -46,6 +52,7 @@ private:
     void buildUi();
     void loadImage(const QString &filePath);
     void updateThresholdLabel();
+    void updateNavButtonStates();
     void updateBinaryAndPreview();
     QVector<quint8> buildBinaryImage(int &paddedWidth, int &paddedHeight) const;
     QByteArray buildPackedBytes(int paddedWidth, int paddedHeight, const QVector<quint8> &binary) const;
@@ -64,12 +71,19 @@ private:
     QRadioButton *verticalRadio_ = nullptr;
     QRadioButton *msbRadio_ = nullptr;
     QRadioButton *lsbRadio_ = nullptr;
+    QPushButton *openFolderButton_ = nullptr;
     QPushButton *generateButton_ = nullptr;
     QPushButton *copyButton_ = nullptr;
     QPushButton *saveButton_ = nullptr;
+    QPushButton *playButton_ = nullptr;
+    QPushButton *prevButton_ = nullptr;
+    QPushButton *nextButton_ = nullptr;
+    QTimer *playbackTimer_ = nullptr;
     QTextEdit *outputEdit_ = nullptr;
 
     QString currentFilePath_;
+    QStringList imageFiles_;
+    int currentImageIndex_ = -1;
     QVector<quint8> grayscalePixels_;
     QVector<quint8> binaryPixels_;
     int imageWidth_ = 0;

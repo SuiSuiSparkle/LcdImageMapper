@@ -387,6 +387,8 @@ CMakeFiles/ImageTool.dir/ImageTool_autogen/mocs_compilation.cpp.obj: \
  E:/QT/6.10.2/mingw_64/include/QtWidgets/qtabwidget.h \
  E:/QT/6.10.2/mingw_64/include/QtCore/QString \
  E:/QT/6.10.2/mingw_64/include/QtCore/qstring.h \
+ E:/QT/6.10.2/mingw_64/include/QtCore/QStringList \
+ E:/QT/6.10.2/mingw_64/include/QtCore/qstringlist.h \
  E:/QT/6.10.2/mingw_64/include/QtCore/QVector \
  E:/QT/6.10.2/mingw_64/include/QtCore/qvector.h \
  E:/QT/6.10.2/mingw_64/include/QtCore/qtmochelpers.h \

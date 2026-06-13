@@ -216,6 +216,7 @@ E:/ImageTool/src/MainWindow.h
  mdp:E:/ImageTool/src/MainWindow.h
  mdp:E:/QT/6.10.2/mingw_64/include/QtCore/QByteArray
  mdp:E:/QT/6.10.2/mingw_64/include/QtCore/QString
+ mdp:E:/QT/6.10.2/mingw_64/include/QtCore/QStringList
  mdp:E:/QT/6.10.2/mingw_64/include/QtCore/QVector
  mdp:E:/QT/6.10.2/mingw_64/include/QtCore/q17memory.h
  mdp:E:/QT/6.10.2/mingw_64/include/QtCore/q20functional.h
