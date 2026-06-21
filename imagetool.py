@@ -1,4 +1,4 @@
-#!/usr,bin/en, python3,
+#!/usr,bin/en? python3,
 """
 ImageTool - 图像取模工具。
 
@@ -27,6 +27,7 @@ from PyQt6.QtCore import QCoreApplication, QObject, QThread, Qt, QTimer, pyqtSig
 from PyQt6.QtGui import QColor, QImage, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QApplication,
+    QComboBox,
     QFileDialog,
     QFrame,
     QGridLayout,
@@ -178,6 +179,114 @@ def pack_binary_matrix(
     bitorder = "big" if msb_first else "little"
     packed = np.packbits(work_matrix, axis=1, bitorder=bitorder)
     return bytearray(packed.reshape(-1).tolist())
+
+
+def parse_c_array_text(text: str) -> bytearray:
+    """解析 C 风格字节数组文本（如 "{0xFF, 0x00}" 或 "0xFF,0x00"）为 bytearray。"""
+    # Remove C comments
+    result = []
+    in_block_comment = False
+    for line in text.splitlines():
+        stripped = line.strip()
+        if in_block_comment:
+            end_idx = stripped.find("*/")
+            if end_idx >= 0:
+                stripped = stripped[end_idx + 2:]
+                in_block_comment = False
+            else:
+                continue
+        # Remove line comments
+        line_comment_idx = stripped.find("//")
+        if line_comment_idx >= 0:
+            stripped = stripped[:line_comment_idx]
+        # Handle block comments on a single line
+        while "/*" in stripped:
+            start = stripped.find("/*")
+            end = stripped.find("*/", start)
+            if end >= 0:
+                stripped = stripped[:start] + stripped[end + 2:]
+            else:
+                stripped = stripped[:start]
+                in_block_comment = True
+                break
+        # Remove curly braces, brackets, "static", "const", "uint8_t", "unsigned", "char",
+        # variable names, #pragma, #include, #define, =, ; and similar non-value tokens
+        for token in [
+            "const", "static", "uint8_t", "uint16_t", "uint32_t",
+            "unsigned", "char", "int", "short", "long",
+            "volatile", "PROGMEM", "FAR",
+            "#pragma", "#include", "#define", "#ifndef", "#ifdef", "#endif",
+            "pragma", "include", "define", "ifndef", "ifdef", "endif",
+            "once", "=", ";", "{", "}", "(", ")",
+        ]:
+            stripped = stripped.replace(token, " ")
+        # Keep only hex numbers (0x..) and commas
+        tokens = stripped.replace(",", " ").split()
+        for token in tokens:
+            token = token.strip()
+            if token.startswith("0x") or token.startswith("0X"):
+                try:
+                    result.append(int(token, 16))
+                except ValueError:
+                    pass
+            elif token.startswith("0b") or token.startswith("0B"):
+                try:
+                    result.append(int(token, 2))
+                except ValueError:
+                    pass
+            elif token.isdigit():
+                result.append(int(token))
+    return bytearray(result)
+
+
+def unpack_bytes_to_matrix(
+    bytes_array: bytearray,
+    display_width: int,
+    display_height: int,
+    horizontal: bool,
+    msb_first: bool,
+) -> list[int]:
+    """将打包的字节数组按指定显示尺寸和扫描模式解包为二进制像素列表。
+
+    返回一维 list[int]，长度为 display_width * display_height，每个元素 0 或 1。
+    可用于在指定分辨率的显示屏上预览取模结果。
+    """
+    pixels = [0] * (display_width * display_height)
+
+    if horizontal:
+        # 水平扫描：逐行，每行 display_width 像素 = ceil(display_width/8) 字节
+        row_bytes = (display_width + 7) // 8
+        for y in range(min(display_height, (len(bytes_array) + row_bytes - 1) // row_bytes)):
+            for bx in range(row_bytes):
+                idx = y * row_bytes + bx
+                if idx >= len(bytes_array):
+                    break
+                byte_val = bytes_array[idx]
+                for bit in range(8):
+                    x = bx * 8 + bit
+                    if x >= display_width:
+                        break
+                    bit_index = (7 - bit) if msb_first else bit
+                    pixel_on = (byte_val >> bit_index) & 1
+                    pixels[y * display_width + x] = pixel_on
+    else:
+        # 垂直扫描：逐列，每列 display_height 像素 = ceil(display_height/8) 字节
+        col_bytes = (display_height + 7) // 8
+        for x in range(min(display_width, (len(bytes_array) + col_bytes - 1) // col_bytes)):
+            for by in range(col_bytes):
+                idx = x * col_bytes + by
+                if idx >= len(bytes_array):
+                    break
+                byte_val = bytes_array[idx]
+                for bit in range(8):
+                    y = by * 8 + bit
+                    if y >= display_height:
+                        break
+                    bit_index = (7 - bit) if msb_first else bit
+                    pixel_on = (byte_val >> bit_index) & 1
+                    pixels[y * display_width + x] = pixel_on
+
+    return pixels
 
 
 def format_bytes_per_line(bytes_array: bytearray) -> str:
@@ -569,6 +678,66 @@ class ImageToolWindow(QMainWindow):
         batch_layout.addWidget(self.export_all_header_button)
 
         right_layout.addWidget(batch_group)
+
+        # --- Manual Bitmap Input ---
+        manual_group = QGroupBox("Manual Bitmap Input")
+        manual_layout = QVBoxLayout(manual_group)
+
+        self.manual_input_edit = QTextEdit()
+        self.manual_input_edit.setPlaceholderText(
+            "Paste C byte array here, e.g.:\n"
+            "const uint8_t bitmap[] = {\n"
+            "    0xFF, 0x00, 0xAA, ...\n"
+            "};"
+        )
+        self.manual_input_edit.setMaximumHeight(100)
+        self.manual_input_edit.setFontFamily("Consolas")
+        self.manual_input_edit.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        manual_layout.addWidget(self.manual_input_edit)
+
+        display_size_row = QHBoxLayout()
+        display_size_row.addWidget(QLabel("Display Resolution"))
+
+        self.display_combo = QComboBox()
+        self.display_combo.addItems([
+            "128×64", "128×32", "96×16", "64×48", "64×32",
+            "32×16", "72×40", "84×48", "132×64", "Custom",
+        ])
+        self.display_combo.setCurrentText("128×64")
+        self.display_combo.currentTextChanged.connect(self._on_display_preset_changed)
+        display_size_row.addWidget(self.display_combo, 1)
+
+        display_size_row.addWidget(QLabel("W"))
+        self.manual_display_width = QSpinBox()
+        self.manual_display_width.setRange(1, 2048)
+        self.manual_display_width.setValue(128)
+        self.manual_display_width.setEnabled(False)
+        display_size_row.addWidget(self.manual_display_width)
+
+        display_size_row.addWidget(QLabel("H"))
+        self.manual_display_height = QSpinBox()
+        self.manual_display_height.setRange(1, 2048)
+        self.manual_display_height.setValue(64)
+        self.manual_display_height.setEnabled(False)
+        display_size_row.addWidget(self.manual_display_height)
+
+        manual_layout.addLayout(display_size_row)
+
+        manual_btn_row = QHBoxLayout()
+        self.manual_preview_button = QPushButton("Parse & Preview")
+        self.manual_preview_button.clicked.connect(self.manual_bitmap_preview)
+        self.manual_clear_button = QPushButton("Clear")
+        self.manual_clear_button.clicked.connect(self._manual_clear)
+        manual_btn_row.addWidget(self.manual_preview_button)
+        manual_btn_row.addWidget(self.manual_clear_button)
+
+        self.manual_status_label = QLabel("")
+        self.manual_status_label.setStyleSheet("color:#888; font-size:11px;")
+        manual_btn_row.addWidget(self.manual_status_label, 1)
+
+        manual_layout.addLayout(manual_btn_row)
+
+        right_layout.addWidget(manual_group)
 
         action_row = QHBoxLayout()
         self.generate_button = QPushButton("Generate")
@@ -1040,10 +1209,20 @@ class ImageToolWindow(QMainWindow):
         failed = 0
         errors = []
 
+        used_names: set[str] = set()
+
         for result in self.batch_results.iter_results():
             safe_name = sanitize_identifier(Path(result.file_name).stem)
             if not safe_name:
                 safe_name = f"image_{result.index:03d}"
+
+            # Deduplicate: append counter suffix if the name is already used
+            unique_name = safe_name
+            dedup = 1
+            while unique_name in used_names:
+                dedup += 1
+                unique_name = f"{safe_name}_{dedup}"
+            used_names.add(unique_name)
 
             # Re-build the binary for this image using current threshold/scan/bit settings
             try:
@@ -1064,11 +1243,11 @@ class ImageToolWindow(QMainWindow):
                 continue
 
             lines.append(f"// ---- {result.file_name} ----")
-            lines.append(f"#define {safe_name}_WIDTH  {padded_width}")
-            lines.append(f"#define {safe_name}_HEIGHT {padded_height}")
-            lines.append(f"#define {safe_name}_BYTES  {len(bytes_array)}")
+            lines.append(f"#define {unique_name}_WIDTH  {padded_width}")
+            lines.append(f"#define {unique_name}_HEIGHT {padded_height}")
+            lines.append(f"#define {unique_name}_BYTES  {len(bytes_array)}")
             lines.append("")
-            lines.append(f"static const uint8_t {safe_name}_bitmap[] = {{")
+            lines.append(f"static const uint8_t {unique_name}_bitmap[] = {{")
             formatted = format_bytes_per_line(bytes_array)
             if formatted:
                 lines.append(formatted)
@@ -1097,6 +1276,79 @@ class ImageToolWindow(QMainWindow):
 
         # Show the combined output in the text edit as well
         self.output_edit.setPlainText(payload)
+
+    # ------------------------------------------------------------------
+    # Manual Bitmap Input
+    # ------------------------------------------------------------------
+
+    def _on_display_preset_changed(self, text: str):
+        """当用户选择显示器分辨率预设时自动设置 W/H spinbox 的值。"""
+        custom = text == "Custom"
+        self.manual_display_width.setEnabled(custom)
+        self.manual_display_height.setEnabled(custom)
+        if not custom:
+            parts = text.split("×")
+            if len(parts) == 2:
+                self.manual_display_width.setValue(int(parts[0]))
+                self.manual_display_height.setValue(int(parts[1]))
+
+    def manual_bitmap_preview(self):
+        """解析用户输入的 C 字节数组，按选择的显示尺寸解包并预览。"""
+        raw_text = self.manual_input_edit.toPlainText().strip()
+        if not raw_text:
+            QMessageBox.information(self, "No Data", "Please paste a C byte array first.")
+            return
+
+        bytes_array = parse_c_array_text(raw_text)
+        if not bytes_array:
+            QMessageBox.warning(self, "Parse Error",
+                "Could not parse any byte values from the input.\n"
+                "Expected format: 0xFF, 0x00, 0xAA, ...")
+            return
+
+        display_w = self.manual_display_width.value()
+        display_h = self.manual_display_height.value()
+        horizontal = self.horizontal_radio.isChecked()
+        msb_first = self.msb_radio.isChecked()
+
+        pixels = unpack_bytes_to_matrix(bytes_array, display_w, display_h, horizontal, msb_first)
+
+        # Update the preview widget
+        self.preview_widget.set_binary_image(display_w, display_h, pixels)
+
+        # Show status info
+        mode_str = "Horizontal" if horizontal else "Vertical"
+        order_str = "MSB first" if msb_first else "LSB first"
+        self.manual_status_label.setText(
+            f"Parsed {len(bytes_array)} bytes | "
+            f"Display {display_w}×{display_h} | "
+            f"{mode_str}, {order_str}"
+        )
+
+        # Also build and show the parsed array text in the output area
+        header_lines = [
+            f"/* Manual input — {len(bytes_array)} bytes */",
+            f"/* Display: {display_w}×{display_h}, {mode_str}, {order_str} */",
+            f"/* Parsed from {len(raw_text)} chars of input */",
+            "",
+        ]
+        header_lines.append("#define DISPLAY_WIDTH  {}".format(display_w))
+        header_lines.append("#define DISPLAY_HEIGHT {}".format(display_h))
+        header_lines.append("#define DISPLAY_BYTES  {}".format(len(bytes_array)))
+        header_lines.append("")
+        header_lines.append("const uint8_t bitmap[] = {")
+        formatted = format_bytes_per_line(bytes_array)
+        if formatted:
+            header_lines.append(formatted)
+        header_lines.append("};")
+        self.output_edit.setPlainText("\n".join(header_lines))
+
+    def _manual_clear(self):
+        """清空手动输入区域。"""
+        self.manual_input_edit.clear()
+        self.manual_status_label.setText("")
+        self.preview_widget.set_binary_image(0, 0, [])
+        self.output_edit.clear()
 
 
 def main():

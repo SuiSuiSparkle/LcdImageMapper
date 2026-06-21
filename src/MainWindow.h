@@ -8,10 +8,12 @@
 #include <QStringList>
 #include <QVector>
 
+class QComboBox;
 class QLabel;
 class QPushButton;
 class QRadioButton;
 class QSlider;
+class QSpinBox;
 class QTextEdit;
 class QTimer;
 class QWidget;
@@ -34,6 +36,10 @@ private slots:
     void copyBitmap();
     void saveBitmapHeader();
     void exportAllBitmapsToHeader();
+
+private slots:
+    void manualBitmapPreview();
+    void onDisplayPresetChanged(const QString &text);
 
 private:
     enum class ScanMode
@@ -82,6 +88,15 @@ private:
     QPushButton *nextButton_ = nullptr;
     QTimer *playbackTimer_ = nullptr;
     QTextEdit *outputEdit_ = nullptr;
+
+    // Manual Bitmap Input widgets
+    QTextEdit *manualInputEdit_ = nullptr;
+    QComboBox *displayCombo_ = nullptr;
+    QSpinBox *manualDisplayWidth_ = nullptr;
+    QSpinBox *manualDisplayHeight_ = nullptr;
+    QPushButton *manualPreviewButton_ = nullptr;
+    QPushButton *manualClearButton_ = nullptr;
+    QLabel *manualStatusLabel_ = nullptr;
 
     QString currentFilePath_;
     QStringList imageFiles_;

@@ -5,6 +5,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QColor>
+#include <QComboBox>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -26,6 +27,7 @@
 #include <QSlider>
 #include <QStandardPaths>
 #include <QRegularExpression>
+#include <QSet>
 #include <QTextEdit>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -38,6 +40,123 @@ namespace
 QString toHexByte(quint8 value)
 {
     return QStringLiteral("0x%1").arg(static_cast<int>(value), 2, 16, QLatin1Char('0')).toUpper();
+}
+
+QByteArray parseCArrayText(const QString &text)
+{
+    QByteArray result;
+    const QStringList lines = text.split(QLatin1Char('\n'));
+    bool inBlockComment = false;
+
+    for (const QString &rawLine : lines) {
+        QString line = rawLine.trimmed();
+
+        // Handle block comments
+        if (inBlockComment) {
+            int endIdx = line.indexOf(QStringLiteral("*/"));
+            if (endIdx >= 0) {
+                line = line.mid(endIdx + 2).trimmed();
+                inBlockComment = false;
+            } else {
+                continue;
+            }
+        }
+
+        // Remove line comments
+        {
+            int idx = line.indexOf(QStringLiteral("//"));
+            if (idx >= 0) line = line.left(idx).trimmed();
+        }
+
+        // Remove block comments on a single line
+        while (line.contains(QStringLiteral("/*"))) {
+            int start = line.indexOf(QStringLiteral("/*"));
+            int end = line.indexOf(QStringLiteral("*/"), start);
+            if (end >= 0) {
+                line = line.left(start) + line.mid(end + 2);
+            } else {
+                line = line.left(start);
+                inBlockComment = true;
+                break;
+            }
+        }
+
+        // Remove C keywords, braces, etc.
+        const QStringList removeTokens = {
+            QStringLiteral("const"), QStringLiteral("static"), QStringLiteral("uint8_t"),
+            QStringLiteral("uint16_t"), QStringLiteral("uint32_t"), QStringLiteral("unsigned"),
+            QStringLiteral("char"), QStringLiteral("int"), QStringLiteral("short"),
+            QStringLiteral("long"), QStringLiteral("volatile"), QStringLiteral("PROGMEM"),
+            QStringLiteral("#pragma"), QStringLiteral("#include"), QStringLiteral("#define"),
+            QStringLiteral("#ifndef"), QStringLiteral("#ifdef"), QStringLiteral("#endif"),
+            QStringLiteral("pragma"), QStringLiteral("include"), QStringLiteral("define"),
+            QStringLiteral("ifndef"), QStringLiteral("ifdef"), QStringLiteral("endif"),
+            QStringLiteral("once"), QStringLiteral("="), QStringLiteral(";"),
+            QStringLiteral("{"), QStringLiteral("}"), QStringLiteral("("), QStringLiteral(")")
+        };
+        for (const QString &tok : removeTokens) {
+            line.replace(tok, QStringLiteral(" "));
+        }
+
+        // Replace commas with spaces and parse hex/decimal numbers
+        line.replace(QLatin1Char(','), QLatin1Char(' '));
+        const QStringList tokens = line.split(QStringLiteral(" "), Qt::SkipEmptyParts);
+        for (const QString &token : tokens) {
+            QString t = token.trimmed();
+            bool ok = false;
+            quint32 val = 0;
+            if (t.startsWith(QStringLiteral("0x"), Qt::CaseInsensitive)) {
+                val = t.mid(2).toUInt(&ok, 16);
+            } else if (t.startsWith(QStringLiteral("0b"), Qt::CaseInsensitive)) {
+                val = t.mid(2).toUInt(&ok, 2);
+            } else {
+                val = t.toUInt(&ok, 10);
+            }
+            if (ok && val <= 255) {
+                result.append(static_cast<char>(val));
+            }
+        }
+    }
+    return result;
+}
+
+QVector<quint8> unpackBytesToPixels(const QByteArray &bytes, int displayW, int displayH, bool horizontal, bool msbFirst)
+{
+    QVector<quint8> pixels(displayW * displayH, 0);
+
+    if (horizontal) {
+        const int rowBytes = (displayW + 7) / 8;
+        for (int y = 0; y < displayH; ++y) {
+            for (int bx = 0; bx < rowBytes; ++bx) {
+                const int idx = y * rowBytes + bx;
+                if (idx >= bytes.size()) break;
+                const quint8 byteVal = static_cast<quint8>(bytes.at(idx));
+                for (int bit = 0; bit < 8; ++bit) {
+                    const int x = bx * 8 + bit;
+                    if (x >= displayW) break;
+                    const int bitIdx = msbFirst ? (7 - bit) : bit;
+                    pixels[y * displayW + x] = (byteVal >> bitIdx) & 1;
+                }
+            }
+        }
+    } else {
+        const int colBytes = (displayH + 7) / 8;
+        for (int x = 0; x < displayW; ++x) {
+            for (int by = 0; by < colBytes; ++by) {
+                const int idx = x * colBytes + by;
+                if (idx >= bytes.size()) break;
+                const quint8 byteVal = static_cast<quint8>(bytes.at(idx));
+                for (int bit = 0; bit < 8; ++bit) {
+                    const int y = by * 8 + bit;
+                    if (y >= displayH) break;
+                    const int bitIdx = msbFirst ? (7 - bit) : bit;
+                    pixels[y * displayW + x] = (byteVal >> bitIdx) & 1;
+                }
+            }
+        }
+    }
+
+    return pixels;
 }
 }
 
@@ -218,6 +337,72 @@ void MainWindow::buildUi()
     actionRow->addWidget(saveButton_);
     actionRow->addWidget(exportAllButton_);
     rightLayout->addLayout(actionRow);
+
+    // --- Manual Bitmap Input ---
+    auto *manualGroup = new QGroupBox(QStringLiteral("Manual Bitmap Input"), rightPanel);
+    auto *manualLayout = new QVBoxLayout(manualGroup);
+
+    manualInputEdit_ = new QTextEdit(rightPanel);
+    manualInputEdit_->setPlaceholderText(
+        QStringLiteral("Paste C byte array here, e.g.:\n"
+                       "const uint8_t bitmap[] = { 0xFF, 0x00, 0xAA, ... };"));
+    manualInputEdit_->setMaximumHeight(80);
+    manualInputEdit_->setFontFamily(QStringLiteral("Consolas"));
+    manualInputEdit_->setLineWrapMode(QTextEdit::NoWrap);
+    manualLayout->addWidget(manualInputEdit_);
+
+    auto *dispRow = new QHBoxLayout();
+    dispRow->addWidget(new QLabel(QStringLiteral("Display Resolution"), rightPanel));
+
+    displayCombo_ = new QComboBox(rightPanel);
+    displayCombo_->addItems({
+        QStringLiteral("128×64"), QStringLiteral("128×32"), QStringLiteral("96×16"),
+        QStringLiteral("64×48"), QStringLiteral("64×32"), QStringLiteral("32×16"),
+        QStringLiteral("72×40"), QStringLiteral("84×48"), QStringLiteral("132×64"),
+        QStringLiteral("Custom")
+    });
+    displayCombo_->setCurrentText(QStringLiteral("128×64"));
+    connect(displayCombo_, &QComboBox::currentTextChanged, this, &MainWindow::onDisplayPresetChanged);
+    dispRow->addWidget(displayCombo_, 1);
+
+    dispRow->addWidget(new QLabel(QStringLiteral("W"), rightPanel));
+    manualDisplayWidth_ = new QSpinBox(rightPanel);
+    manualDisplayWidth_->setRange(1, 2048);
+    manualDisplayWidth_->setValue(128);
+    manualDisplayWidth_->setEnabled(false);
+    dispRow->addWidget(manualDisplayWidth_);
+
+    dispRow->addWidget(new QLabel(QStringLiteral("H"), rightPanel));
+    manualDisplayHeight_ = new QSpinBox(rightPanel);
+    manualDisplayHeight_->setRange(1, 2048);
+    manualDisplayHeight_->setValue(64);
+    manualDisplayHeight_->setEnabled(false);
+    dispRow->addWidget(manualDisplayHeight_);
+
+    manualLayout->addLayout(dispRow);
+
+    auto *manualBtnRow = new QHBoxLayout();
+    manualPreviewButton_ = new QPushButton(QStringLiteral("Parse && Preview"), rightPanel);
+    manualPreviewButton_->setMinimumHeight(32);
+    connect(manualPreviewButton_, &QPushButton::clicked, this, &MainWindow::manualBitmapPreview);
+    manualBtnRow->addWidget(manualPreviewButton_);
+
+    manualClearButton_ = new QPushButton(QStringLiteral("Clear"), rightPanel);
+    connect(manualClearButton_, &QPushButton::clicked, this, [this]() {
+        manualInputEdit_->clear();
+        manualStatusLabel_->clear();
+        previewWidget_->setBinaryImage(0, 0, {});
+        outputEdit_->clear();
+    });
+    manualBtnRow->addWidget(manualClearButton_);
+
+    manualStatusLabel_ = new QLabel(QStringLiteral(""), rightPanel);
+    manualStatusLabel_->setStyleSheet(QStringLiteral("color:#888; font-size:11px;"));
+    manualBtnRow->addWidget(manualStatusLabel_, 1);
+
+    manualLayout->addLayout(manualBtnRow);
+
+    rightLayout->addWidget(manualGroup);
 
     outputEdit_ = new QTextEdit(rightPanel);
     outputEdit_->setPlaceholderText(QStringLiteral("Generated C array will appear here."));
@@ -691,12 +876,24 @@ void MainWindow::exportAllBitmapsToHeader()
     int succeeded = 0;
     int failed = 0;
     QStringList errors;
+    QSet<QString> usedNames;
 
     for (int i = 0; i < totalFiles; ++i) {
         const QString &imgPath = imageFiles_.at(i);
         const QFileInfo fi(imgPath);
         const QString baseName = fi.completeBaseName();
-        const QString safeName = sanitizeIdentifier(baseName);
+
+        // Sanitize and deduplicate the identifier name
+        QString safeName = sanitizeIdentifier(baseName);
+        if (safeName.isEmpty()) {
+            safeName = QStringLiteral("image_%1").arg(i + 1);
+        }
+        QString uniqueName = safeName;
+        int dedupCounter = 1;
+        while (usedNames.contains(uniqueName)) {
+            uniqueName = QStringLiteral("%1_%2").arg(safeName).arg(++dedupCounter);
+        }
+        usedNames.insert(uniqueName);
 
         // Load the image
         int w = 0, h = 0, ch = 0;
@@ -763,10 +960,10 @@ void MainWindow::exportAllBitmapsToHeader()
 
         // Emit bitmap data for this image
         output += QStringLiteral("// ---- %1 ----\n").arg(baseName);
-        output += QStringLiteral("#define %1_WIDTH  %2\n").arg(safeName).arg(pw);
-        output += QStringLiteral("#define %1_HEIGHT %2\n").arg(safeName).arg(ph);
-        output += QStringLiteral("#define %1_BYTES  %2\n\n").arg(safeName).arg(packed.size());
-        output += QStringLiteral("static const uint8_t %1_bitmap[] = {\n").arg(safeName);
+        output += QStringLiteral("#define %1_WIDTH  %2\n").arg(uniqueName).arg(pw);
+        output += QStringLiteral("#define %1_HEIGHT %2\n").arg(uniqueName).arg(ph);
+        output += QStringLiteral("#define %1_BYTES  %2\n\n").arg(uniqueName).arg(packed.size());
+        output += QStringLiteral("static const uint8_t %1_bitmap[] = {\n").arg(uniqueName);
         output += formatBytesPerLine(packed);
         output += QStringLiteral("\n};\n\n");
 
@@ -807,5 +1004,63 @@ void MainWindow::exportAllBitmapsToHeader()
     QMessageBox::information(this, QStringLiteral("Export Complete"), msg);
 
     // Also show the full output in the text edit for inspection
+    outputEdit_->setPlainText(output);
+}
+
+void MainWindow::onDisplayPresetChanged(const QString &text)
+{
+    const bool custom = (text == QStringLiteral("Custom"));
+    manualDisplayWidth_->setEnabled(custom);
+    manualDisplayHeight_->setEnabled(custom);
+    if (!custom) {
+        const QStringList parts = text.split(QStringLiteral("×"));
+        if (parts.size() == 2) {
+            manualDisplayWidth_->setValue(parts.at(0).toInt());
+            manualDisplayHeight_->setValue(parts.at(1).toInt());
+        }
+    }
+}
+
+void MainWindow::manualBitmapPreview()
+{
+    const QString rawText = manualInputEdit_->toPlainText().trimmed();
+    if (rawText.isEmpty()) {
+        QMessageBox::information(this, QStringLiteral("No Data"),
+            QStringLiteral("Please paste a C byte array first."));
+        return;
+    }
+
+    const QByteArray bytes = parseCArrayText(rawText);
+    if (bytes.isEmpty()) {
+        QMessageBox::warning(this, QStringLiteral("Parse Error"),
+            QStringLiteral("Could not parse any byte values from the input.\n"
+                           "Expected format: 0xFF, 0x00, 0xAA, ..."));
+        return;
+    }
+
+    const int displayW = manualDisplayWidth_->value();
+    const int displayH = manualDisplayHeight_->value();
+    const bool horizontal = horizontalRadio_->isChecked();
+    const bool msbFirst = msbRadio_->isChecked();
+
+    const QVector<quint8> pixels = unpackBytesToPixels(bytes, displayW, displayH, horizontal, msbFirst);
+    previewWidget_->setBinaryImage(displayW, displayH, pixels);
+
+    const QString modeStr = horizontal ? QStringLiteral("Horizontal") : QStringLiteral("Vertical");
+    const QString orderStr = msbFirst ? QStringLiteral("MSB first") : QStringLiteral("LSB first");
+    manualStatusLabel_->setText(QStringLiteral("Parsed %1 bytes | Display %2×%3 | %4, %5")
+        .arg(bytes.size()).arg(displayW).arg(displayH).arg(modeStr).arg(orderStr));
+
+    // Build output text
+    QString output;
+    output += QStringLiteral("/* Manual input — %1 bytes */\n").arg(bytes.size());
+    output += QStringLiteral("/* Display: %1×%2, %3, %4 */\n").arg(displayW).arg(displayH).arg(modeStr).arg(orderStr);
+    output += QStringLiteral("/* Parsed from %1 chars of input */\n\n").arg(rawText.size());
+    output += QStringLiteral("#define DISPLAY_WIDTH  %1\n").arg(displayW);
+    output += QStringLiteral("#define DISPLAY_HEIGHT %1\n").arg(displayH);
+    output += QStringLiteral("#define DISPLAY_BYTES  %1\n\n").arg(bytes.size());
+    output += QStringLiteral("const uint8_t bitmap[] = {\n");
+    output += formatBytesPerLine(bytes);
+    output += QStringLiteral("\n};\n");
     outputEdit_->setPlainText(output);
 }
