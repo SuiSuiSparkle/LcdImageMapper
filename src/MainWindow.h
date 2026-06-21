@@ -33,6 +33,7 @@ private slots:
     void generateBitmap();
     void copyBitmap();
     void saveBitmapHeader();
+    void exportAllBitmapsToHeader();
 
 private:
     enum class ScanMode
@@ -75,6 +76,7 @@ private:
     QPushButton *generateButton_ = nullptr;
     QPushButton *copyButton_ = nullptr;
     QPushButton *saveButton_ = nullptr;
+    QPushButton *exportAllButton_ = nullptr;
     QPushButton *playButton_ = nullptr;
     QPushButton *prevButton_ = nullptr;
     QPushButton *nextButton_ = nullptr;

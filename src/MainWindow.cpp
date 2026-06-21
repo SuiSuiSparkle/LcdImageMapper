@@ -5,6 +5,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QColor>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileDialog>
@@ -24,6 +25,7 @@
 #include <QSizePolicy>
 #include <QSlider>
 #include <QStandardPaths>
+#include <QRegularExpression>
 #include <QTextEdit>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -209,9 +211,12 @@ void MainWindow::buildUi()
     generateButton_ = new QPushButton(QStringLiteral("Generate"), rightPanel);
     copyButton_ = new QPushButton(QStringLiteral("Copy"), rightPanel);
     saveButton_ = new QPushButton(QStringLiteral("Save as .h"), rightPanel);
+    exportAllButton_ = new QPushButton(QStringLiteral("Export All as .h"), rightPanel);
+    exportAllButton_->setMinimumHeight(36);
     actionRow->addWidget(generateButton_);
     actionRow->addWidget(copyButton_);
     actionRow->addWidget(saveButton_);
+    actionRow->addWidget(exportAllButton_);
     rightLayout->addLayout(actionRow);
 
     outputEdit_ = new QTextEdit(rightPanel);
@@ -233,6 +238,7 @@ void MainWindow::buildUi()
     connect(generateButton_, &QPushButton::clicked, this, &MainWindow::generateBitmap);
     connect(copyButton_, &QPushButton::clicked, this, &MainWindow::copyBitmap);
     connect(saveButton_, &QPushButton::clicked, this, &MainWindow::saveBitmapHeader);
+    connect(exportAllButton_, &QPushButton::clicked, this, &MainWindow::exportAllBitmapsToHeader);
     connect(horizontalRadio_, &QRadioButton::toggled, this, &MainWindow::updateBinaryAndPreview);
     connect(verticalRadio_, &QRadioButton::toggled, this, &MainWindow::updateBinaryAndPreview);
     connect(msbRadio_, &QRadioButton::toggled, this, &MainWindow::updateBinaryAndPreview);
@@ -622,4 +628,184 @@ void MainWindow::saveBitmapHeader()
 
     file.write(headerText.toUtf8());
     file.close();
+}
+
+namespace
+{
+QString sanitizeIdentifier(const QString &name)
+{
+    QString result = name;
+    // Replace non-alphanumeric characters (except underscore) with underscore
+    static const QRegularExpression invalidChars(QStringLiteral("[^a-zA-Z0-9_]"));
+    result.replace(invalidChars, QStringLiteral("_"));
+    // If it starts with a digit, prepend an underscore
+    if (!result.isEmpty() && result.at(0).isDigit()) {
+        result.prepend(QLatin1Char('_'));
+    }
+    return result;
+}
+}
+
+void MainWindow::exportAllBitmapsToHeader()
+{
+    // Must have a folder loaded with images
+    if (imageFiles_.isEmpty()) {
+        QMessageBox::information(this, QStringLiteral("No Folder"),
+            QStringLiteral("Please open a folder of images first using [Open Folder]."));
+        return;
+    }
+
+    // Ask where to save the combined header
+    const QString defaultName = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+        + QStringLiteral("/all_bitmaps.h");
+    const QString filePath = QFileDialog::getSaveFileName(this,
+        QStringLiteral("Export All Bitmaps as Header"),
+        defaultName,
+        QStringLiteral("Header Files (*.h)"));
+    if (filePath.isEmpty()) {
+        return;
+    }
+
+    // Use a separate stbi_load call for each file so we don't disturb the currently displayed image.
+    // Save current state so we can restore it afterward.
+    const QString savedFilePath = currentFilePath_;
+    const int savedIndex = currentImageIndex_;
+    const QVector<quint8> savedGrayscale = grayscalePixels_;
+    const QVector<quint8> savedBinary = binaryPixels_;
+    const int savedW = imageWidth_;
+    const int savedH = imageHeight_;
+    const int savedGW = generatedWidth_;
+    const int savedGH = generatedHeight_;
+
+    // Collect the header content in memory
+    QString output;
+    output += QStringLiteral("#pragma once\n\n");
+    output += QStringLiteral("#include <stdint.h>\n\n");
+    output += QStringLiteral("// ============================================================\n");
+    output += QStringLiteral("//  Auto-generated bitmap header from ImageTool\n");
+    output += QStringLiteral("//  Contains %1 image(s)\n").arg(imageFiles_.size());
+    output += QStringLiteral("//  Generated on: %1\n").arg(QDateTime::currentDateTime().toString(Qt::ISODate));
+    output += QStringLiteral("// ============================================================\n\n");
+
+    const int totalFiles = imageFiles_.size();
+    int succeeded = 0;
+    int failed = 0;
+    QStringList errors;
+
+    for (int i = 0; i < totalFiles; ++i) {
+        const QString &imgPath = imageFiles_.at(i);
+        const QFileInfo fi(imgPath);
+        const QString baseName = fi.completeBaseName();
+        const QString safeName = sanitizeIdentifier(baseName);
+
+        // Load the image
+        int w = 0, h = 0, ch = 0;
+        stbi_uc *raw = stbi_load(imgPath.toUtf8().constData(), &w, &h, &ch, 1);
+        if (!raw) {
+            errors << QStringLiteral("  [%1] Failed to load: %2").arg(i + 1).arg(imgPath);
+            ++failed;
+            continue;
+        }
+
+        // Build binary image
+        const int pw = ((w + 7) / 8) * 8;
+        const int ph = ((h + 7) / 8) * 8;
+        QVector<quint8> gray(w * h);
+        std::copy(raw, raw + w * h, gray.begin());
+        stbi_image_free(raw);
+
+        const int threshold = thresholdSlider_->value();
+        QVector<quint8> binary(pw * ph, 0);
+        for (int y = 0; y < h; ++y) {
+            for (int x = 0; x < w; ++x) {
+                const bool on = gray.at(y * w + x) >= threshold;
+                binary[y * pw + x] = on ? 1 : 0;
+            }
+        }
+
+        // Pack bytes (reuse buildPackedBytes logic inline to avoid modifying internal state)
+        const ScanMode scanMode = horizontalRadio_->isChecked() ? ScanMode::Horizontal : ScanMode::Vertical;
+        const BitOrder bitOrder = msbRadio_->isChecked() ? BitOrder::MsbFirst : BitOrder::LsbFirst;
+
+        const int totalBytes = scanMode == ScanMode::Horizontal
+            ? (pw / 8) * ph
+            : (ph / 8) * pw;
+        QByteArray packed(totalBytes, 0);
+
+        int outIdx = 0;
+        if (scanMode == ScanMode::Horizontal) {
+            for (int y = 0; y < ph; ++y) {
+                for (int bx = 0; bx < pw; bx += 8) {
+                    quint8 byteVal = 0;
+                    for (int bit = 0; bit < 8; ++bit) {
+                        const int x = bx + bit;
+                        if (binary.at(y * pw + x) == 0) continue;
+                        const int bitIdx = bitOrder == BitOrder::MsbFirst ? (7 - bit) : bit;
+                        byteVal |= static_cast<quint8>(1u << bitIdx);
+                    }
+                    packed[outIdx++] = static_cast<char>(byteVal);
+                }
+            }
+        } else {
+            for (int x = 0; x < pw; ++x) {
+                for (int by = 0; by < ph; by += 8) {
+                    quint8 byteVal = 0;
+                    for (int bit = 0; bit < 8; ++bit) {
+                        const int y = by + bit;
+                        if (binary.at(y * pw + x) == 0) continue;
+                        const int bitIdx = bitOrder == BitOrder::MsbFirst ? (7 - bit) : bit;
+                        byteVal |= static_cast<quint8>(1u << bitIdx);
+                    }
+                    packed[outIdx++] = static_cast<char>(byteVal);
+                }
+            }
+        }
+
+        // Emit bitmap data for this image
+        output += QStringLiteral("// ---- %1 ----\n").arg(baseName);
+        output += QStringLiteral("#define %1_WIDTH  %2\n").arg(safeName).arg(pw);
+        output += QStringLiteral("#define %1_HEIGHT %2\n").arg(safeName).arg(ph);
+        output += QStringLiteral("#define %1_BYTES  %2\n\n").arg(safeName).arg(packed.size());
+        output += QStringLiteral("static const uint8_t %1_bitmap[] = {\n").arg(safeName);
+        output += formatBytesPerLine(packed);
+        output += QStringLiteral("\n};\n\n");
+
+        ++succeeded;
+    }
+
+    // Restore original state
+    currentFilePath_ = savedFilePath;
+    currentImageIndex_ = savedIndex;
+    grayscalePixels_ = savedGrayscale;
+    binaryPixels_ = savedBinary;
+    imageWidth_ = savedW;
+    imageHeight_ = savedH;
+    generatedWidth_ = savedGW;
+    generatedHeight_ = savedGH;
+
+    // Summary
+    output += QStringLiteral("// ============================================================\n");
+    output += QStringLiteral("//  Summary: %1 succeeded, %2 failed\n").arg(succeeded).arg(failed);
+    output += QStringLiteral("// ============================================================\n");
+
+    // Write file
+    QFile file(filePath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::critical(this, QStringLiteral("Export Failed"),
+            QStringLiteral("Unable to write the selected file."));
+        return;
+    }
+    file.write(output.toUtf8());
+    file.close();
+
+    // Show result
+    QString msg = QStringLiteral("Export complete!\n\n  Succeeded: %1\n  Failed: %2\n\nSaved to:\n  %3")
+        .arg(succeeded).arg(failed).arg(filePath);
+    if (!errors.isEmpty()) {
+        msg += QStringLiteral("\n\nErrors:\n") + errors.join(QStringLiteral("\n"));
+    }
+    QMessageBox::information(this, QStringLiteral("Export Complete"), msg);
+
+    // Also show the full output in the text edit for inspection
+    outputEdit_->setPlainText(output);
 }

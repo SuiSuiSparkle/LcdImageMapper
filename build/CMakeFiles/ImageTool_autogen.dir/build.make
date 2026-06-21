@@ -71,7 +71,7 @@ ImageTool_autogen/timestamp: E:/QT/6.10.2/mingw_64/bin/moc.exe
 ImageTool_autogen/timestamp: E:/QT/6.10.2/mingw_64/bin/uic.exe
 ImageTool_autogen/timestamp: CMakeFiles/ImageTool_autogen.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=E:\ImageTool\build\CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Automatic MOC and UIC for target ImageTool"
-	"C:\Program Files\CMake\bin\cmake.exe" -E cmake_autogen E:/ImageTool/build/CMakeFiles/ImageTool_autogen.dir/AutogenInfo.json ""
+	"C:\Program Files\CMake\bin\cmake.exe" -E cmake_autogen E:/ImageTool/build/CMakeFiles/ImageTool_autogen.dir/AutogenInfo.json Debug
 	"C:\Program Files\CMake\bin\cmake.exe" -E touch E:/ImageTool/build/ImageTool_autogen/timestamp
 
 CMakeFiles/ImageTool_autogen.dir/codegen:

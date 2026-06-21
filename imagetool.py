@@ -1,4 +1,4 @@
-#!/usr/bin/en, python3
+#!/usr,bin/en, python3,
 """
 ImageTool - 图像取模工具。
 
@@ -564,6 +564,10 @@ class ImageToolWindow(QMainWindow):
         self.export_txt_button.clicked.connect(self.export_batch_txt)
         batch_layout.addWidget(self.export_txt_button)
 
+        self.export_all_header_button = QPushButton("Export All as .h")
+        self.export_all_header_button.clicked.connect(self.export_all_bitmaps_header)
+        batch_layout.addWidget(self.export_all_header_button)
+
         right_layout.addWidget(batch_group)
 
         action_row = QHBoxLayout()
@@ -603,6 +607,7 @@ class ImageToolWindow(QMainWindow):
         self.copy_button.setEnabled(not busy)
         self.save_button.setEnabled(not busy)
         self.export_txt_button.setEnabled(not busy and self.batch_mode)
+        self.export_all_header_button.setEnabled(not busy and self.batch_mode)
         self.sequence_spin.setEnabled(not busy and self.batch_mode and self.batch_results.length > 0)
         has_batch = self.batch_mode and self.batch_results.length > 0
         self.prev_button.setEnabled(not busy and has_batch)
@@ -1001,6 +1006,97 @@ class ImageToolWindow(QMainWindow):
             QMessageBox.information(self, "Saved", f"Batch TXT exported to {file_path}")
         except Exception as exc:
             QMessageBox.critical(self, "Export Failed", f"Unable to export TXT: {exc}")
+
+    def export_all_bitmaps_header(self):
+        """将所有批处理图片的 bitmap 导出到一个头文件中。"""
+        if not self.batch_mode or self.batch_results.length == 0:
+            QMessageBox.information(self, "No Batch", "Please open a valid folder first.")
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export All Bitmaps as Header",
+            "all_bitmaps.h",
+            "Header Files (*.h)",
+        )
+        if not file_path:
+            return
+
+        from datetime import datetime
+
+        lines = []
+        lines.append("#pragma once")
+        lines.append("")
+        lines.append("#include <stdint.h>")
+        lines.append("")
+        lines.append("// ============================================================")
+        lines.append("//  Auto-generated bitmap header from ImageTool")
+        lines.append(f"//  Contains {self.batch_results.length} image(s)")
+        lines.append(f"//  Generated on: {datetime.now().isoformat()}")
+        lines.append("// ============================================================")
+        lines.append("")
+
+        succeeded = 0
+        failed = 0
+        errors = []
+
+        for result in self.batch_results.iter_results():
+            safe_name = sanitize_identifier(Path(result.file_name).stem)
+            if not safe_name:
+                safe_name = f"image_{result.index:03d}"
+
+            # Re-build the binary for this image using current threshold/scan/bit settings
+            try:
+                padded_width, padded_height, binary = build_binary_matrix(
+                    result.gray_pixels,
+                    result.original_width,
+                    result.original_height,
+                    self.threshold_slider.value(),
+                )
+                bytes_array = pack_binary_matrix(
+                    binary,
+                    self.horizontal_radio.isChecked(),
+                    self.msb_radio.isChecked(),
+                )
+            except Exception as exc:
+                errors.append(f"  [{result.index}] {result.file_name}: {exc}")
+                failed += 1
+                continue
+
+            lines.append(f"// ---- {result.file_name} ----")
+            lines.append(f"#define {safe_name}_WIDTH  {padded_width}")
+            lines.append(f"#define {safe_name}_HEIGHT {padded_height}")
+            lines.append(f"#define {safe_name}_BYTES  {len(bytes_array)}")
+            lines.append("")
+            lines.append(f"static const uint8_t {safe_name}_bitmap[] = {{")
+            formatted = format_bytes_per_line(bytes_array)
+            if formatted:
+                lines.append(formatted)
+            lines.append("};")
+            lines.append("")
+            succeeded += 1
+
+        lines.append("// ============================================================")
+        lines.append(f"//  Summary: {succeeded} succeeded, {failed} failed")
+        lines.append("// ============================================================")
+        lines.append("")
+
+        payload = "\n".join(lines)
+
+        try:
+            with open(file_path, "w", encoding="utf-8") as file_object:
+                file_object.write(payload)
+        except Exception as exc:
+            QMessageBox.critical(self, "Export Failed", f"Unable to write file: {exc}")
+            return
+
+        msg = f"Export complete!\n\n  Succeeded: {succeeded}\n  Failed: {failed}\n\nSaved to:\n  {file_path}"
+        if errors:
+            msg += "\n\nErrors:\n" + "\n".join(errors)
+        QMessageBox.information(self, "Export Complete", msg)
+
+        # Show the combined output in the text edit as well
+        self.output_edit.setPlainText(payload)
 
 
 def main():

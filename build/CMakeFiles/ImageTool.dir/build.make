@@ -72,7 +72,7 @@ ImageTool_autogen/timestamp: E:/QT/6.10.2/mingw_64/bin/moc.exe
 ImageTool_autogen/timestamp: E:/QT/6.10.2/mingw_64/bin/uic.exe
 ImageTool_autogen/timestamp: CMakeFiles/ImageTool.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=E:\ImageTool\build\CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Automatic MOC and UIC for target ImageTool"
-	"C:\Program Files\CMake\bin\cmake.exe" -E cmake_autogen E:/ImageTool/build/CMakeFiles/ImageTool_autogen.dir/AutogenInfo.json ""
+	"C:\Program Files\CMake\bin\cmake.exe" -E cmake_autogen E:/ImageTool/build/CMakeFiles/ImageTool_autogen.dir/AutogenInfo.json Debug
 	"C:\Program Files\CMake\bin\cmake.exe" -E touch E:/ImageTool/build/ImageTool_autogen/timestamp
 
 CMakeFiles/ImageTool.dir/codegen:
@@ -83,45 +83,45 @@ CMakeFiles/ImageTool.dir/ImageTool_autogen/mocs_compilation.cpp.obj: CMakeFiles/
 CMakeFiles/ImageTool.dir/ImageTool_autogen/mocs_compilation.cpp.obj: ImageTool_autogen/mocs_compilation.cpp
 CMakeFiles/ImageTool.dir/ImageTool_autogen/mocs_compilation.cpp.obj: CMakeFiles/ImageTool.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=E:\ImageTool\build\CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object CMakeFiles/ImageTool.dir/ImageTool_autogen/mocs_compilation.cpp.obj"
-	D:\Download\mingw64\bin\c++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ImageTool.dir/ImageTool_autogen/mocs_compilation.cpp.obj -MF CMakeFiles\ImageTool.dir\ImageTool_autogen\mocs_compilation.cpp.obj.d -o CMakeFiles\ImageTool.dir\ImageTool_autogen\mocs_compilation.cpp.obj -c E:\ImageTool\build\ImageTool_autogen\mocs_compilation.cpp
+	D:\Download\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ImageTool.dir/ImageTool_autogen/mocs_compilation.cpp.obj -MF CMakeFiles\ImageTool.dir\ImageTool_autogen\mocs_compilation.cpp.obj.d -o CMakeFiles\ImageTool.dir\ImageTool_autogen\mocs_compilation.cpp.obj -c E:\ImageTool\build\ImageTool_autogen\mocs_compilation.cpp
 
 CMakeFiles/ImageTool.dir/ImageTool_autogen/mocs_compilation.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/ImageTool.dir/ImageTool_autogen/mocs_compilation.cpp.i"
-	D:\Download\mingw64\bin\c++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E E:\ImageTool\build\ImageTool_autogen\mocs_compilation.cpp > CMakeFiles\ImageTool.dir\ImageTool_autogen\mocs_compilation.cpp.i
+	D:\Download\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E E:\ImageTool\build\ImageTool_autogen\mocs_compilation.cpp > CMakeFiles\ImageTool.dir\ImageTool_autogen\mocs_compilation.cpp.i
 
 CMakeFiles/ImageTool.dir/ImageTool_autogen/mocs_compilation.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/ImageTool.dir/ImageTool_autogen/mocs_compilation.cpp.s"
-	D:\Download\mingw64\bin\c++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S E:\ImageTool\build\ImageTool_autogen\mocs_compilation.cpp -o CMakeFiles\ImageTool.dir\ImageTool_autogen\mocs_compilation.cpp.s
+	D:\Download\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S E:\ImageTool\build\ImageTool_autogen\mocs_compilation.cpp -o CMakeFiles\ImageTool.dir\ImageTool_autogen\mocs_compilation.cpp.s
 
 CMakeFiles/ImageTool.dir/src/main.cpp.obj: CMakeFiles/ImageTool.dir/flags.make
 CMakeFiles/ImageTool.dir/src/main.cpp.obj: CMakeFiles/ImageTool.dir/includes_CXX.rsp
 CMakeFiles/ImageTool.dir/src/main.cpp.obj: E:/ImageTool/src/main.cpp
 CMakeFiles/ImageTool.dir/src/main.cpp.obj: CMakeFiles/ImageTool.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=E:\ImageTool\build\CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object CMakeFiles/ImageTool.dir/src/main.cpp.obj"
-	D:\Download\mingw64\bin\c++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ImageTool.dir/src/main.cpp.obj -MF CMakeFiles\ImageTool.dir\src\main.cpp.obj.d -o CMakeFiles\ImageTool.dir\src\main.cpp.obj -c E:\ImageTool\src\main.cpp
+	D:\Download\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ImageTool.dir/src/main.cpp.obj -MF CMakeFiles\ImageTool.dir\src\main.cpp.obj.d -o CMakeFiles\ImageTool.dir\src\main.cpp.obj -c E:\ImageTool\src\main.cpp
 
 CMakeFiles/ImageTool.dir/src/main.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/ImageTool.dir/src/main.cpp.i"
-	D:\Download\mingw64\bin\c++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E E:\ImageTool\src\main.cpp > CMakeFiles\ImageTool.dir\src\main.cpp.i
+	D:\Download\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E E:\ImageTool\src\main.cpp > CMakeFiles\ImageTool.dir\src\main.cpp.i
 
 CMakeFiles/ImageTool.dir/src/main.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/ImageTool.dir/src/main.cpp.s"
-	D:\Download\mingw64\bin\c++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S E:\ImageTool\src\main.cpp -o CMakeFiles\ImageTool.dir\src\main.cpp.s
+	D:\Download\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S E:\ImageTool\src\main.cpp -o CMakeFiles\ImageTool.dir\src\main.cpp.s
 
 CMakeFiles/ImageTool.dir/src/MainWindow.cpp.obj: CMakeFiles/ImageTool.dir/flags.make
 CMakeFiles/ImageTool.dir/src/MainWindow.cpp.obj: CMakeFiles/ImageTool.dir/includes_CXX.rsp
 CMakeFiles/ImageTool.dir/src/MainWindow.cpp.obj: E:/ImageTool/src/MainWindow.cpp
 CMakeFiles/ImageTool.dir/src/MainWindow.cpp.obj: CMakeFiles/ImageTool.dir/compiler_depend.ts
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=E:\ImageTool\build\CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object CMakeFiles/ImageTool.dir/src/MainWindow.cpp.obj"
-	D:\Download\mingw64\bin\c++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ImageTool.dir/src/MainWindow.cpp.obj -MF CMakeFiles\ImageTool.dir\src\MainWindow.cpp.obj.d -o CMakeFiles\ImageTool.dir\src\MainWindow.cpp.obj -c E:\ImageTool\src\MainWindow.cpp
+	D:\Download\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/ImageTool.dir/src/MainWindow.cpp.obj -MF CMakeFiles\ImageTool.dir\src\MainWindow.cpp.obj.d -o CMakeFiles\ImageTool.dir\src\MainWindow.cpp.obj -c E:\ImageTool\src\MainWindow.cpp
 
 CMakeFiles/ImageTool.dir/src/MainWindow.cpp.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/ImageTool.dir/src/MainWindow.cpp.i"
-	D:\Download\mingw64\bin\c++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E E:\ImageTool\src\MainWindow.cpp > CMakeFiles\ImageTool.dir\src\MainWindow.cpp.i
+	D:\Download\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E E:\ImageTool\src\MainWindow.cpp > CMakeFiles\ImageTool.dir\src\MainWindow.cpp.i
 
 CMakeFiles/ImageTool.dir/src/MainWindow.cpp.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/ImageTool.dir/src/MainWindow.cpp.s"
-	D:\Download\mingw64\bin\c++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S E:\ImageTool\src\MainWindow.cpp -o CMakeFiles\ImageTool.dir\src\MainWindow.cpp.s
+	D:\Download\mingw64\bin\g++.exe $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S E:\ImageTool\src\MainWindow.cpp -o CMakeFiles\ImageTool.dir\src\MainWindow.cpp.s
 
 # Object files for target ImageTool
 ImageTool_OBJECTS = \

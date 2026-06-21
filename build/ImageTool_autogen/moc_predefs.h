@@ -12,6 +12,7 @@
 #define _WIN32 1
 #define __INTMAX_C(c) c ## LL
 #define __CHAR_BIT__ 8
+#define QT_DISABLE_NOEXCEPT_FOR_EQUALITY 1
 #define __UINT8_MAX__ 0xff
 #define _WIN64 1
 #define __WINT_MAX__ 0xffff
@@ -60,7 +61,6 @@
 #define __LDBL_MAX__ 1.18973149535723176502126385303097021e+4932L
 #define __FLT64X_MAX_10_EXP__ 4932
 #define __cpp_if_constexpr 201606
-#define QT_NO_DEBUG 1
 #define __UINT_LEAST8_MAX__ 0xff
 #define __GCC_ATOMIC_BOOL_LOCK_FREE 2
 #define __FLT128_DENORM_MIN__ 6.47517511943802511092443895822764655e-4966F128
@@ -345,6 +345,7 @@
 #define __FLT128_HAS_QUIET_NAN__ 1
 #define __INT_FAST8_TYPE__ signed char
 #define __fastcall __attribute__((__fastcall__))
+#define Q_CC_GHS 1
 #define __FLT64X_MIN__ 3.36210314311209350626267781732175260e-4932F64x
 #define __GNUC_STDC_INLINE__ 1
 #define __FLT64_HAS_DENORM__ 1

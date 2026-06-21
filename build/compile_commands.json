@@ -1,0 +1,20 @@
+[
+{
+  "directory": "E:/ImageTool/build",
+  "command": "D:\\Download\\mingw64\\bin\\g++.exe -DMINGW_HAS_SECURE_API=1 -DQT_CORE_LIB -DQT_DISABLE_NOEXCEPT_FOR_EQUALITY -DQT_GUI_LIB -DQT_WIDGETS_LIB -DQ_CC_GHS -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64 @CMakeFiles/ImageTool.dir/includes_CXX.rsp  -Wno-error=all -w -g -std=gnu++17 -o CMakeFiles\\ImageTool.dir\\ImageTool_autogen\\mocs_compilation.cpp.obj -c E:\\ImageTool\\build\\ImageTool_autogen\\mocs_compilation.cpp",
+  "file": "E:/ImageTool/build/ImageTool_autogen/mocs_compilation.cpp",
+  "output": "CMakeFiles/ImageTool.dir/ImageTool_autogen/mocs_compilation.cpp.obj"
+},
+{
+  "directory": "E:/ImageTool/build",
+  "command": "D:\\Download\\mingw64\\bin\\g++.exe -DMINGW_HAS_SECURE_API=1 -DQT_CORE_LIB -DQT_DISABLE_NOEXCEPT_FOR_EQUALITY -DQT_GUI_LIB -DQT_WIDGETS_LIB -DQ_CC_GHS -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64 @CMakeFiles/ImageTool.dir/includes_CXX.rsp  -Wno-error=all -w -g -std=gnu++17 -o CMakeFiles\\ImageTool.dir\\src\\main.cpp.obj -c E:\\ImageTool\\src\\main.cpp",
+  "file": "E:/ImageTool/src/main.cpp",
+  "output": "CMakeFiles/ImageTool.dir/src/main.cpp.obj"
+},
+{
+  "directory": "E:/ImageTool/build",
+  "command": "D:\\Download\\mingw64\\bin\\g++.exe -DMINGW_HAS_SECURE_API=1 -DQT_CORE_LIB -DQT_DISABLE_NOEXCEPT_FOR_EQUALITY -DQT_GUI_LIB -DQT_WIDGETS_LIB -DQ_CC_GHS -DUNICODE -DWIN32 -DWIN64 -D_ENABLE_EXTENDED_ALIGNED_STORAGE -D_UNICODE -D_WIN64 @CMakeFiles/ImageTool.dir/includes_CXX.rsp  -Wno-error=all -w -g -std=gnu++17 -o CMakeFiles\\ImageTool.dir\\src\\MainWindow.cpp.obj -c E:\\ImageTool\\src\\MainWindow.cpp",
+  "file": "E:/ImageTool/src/MainWindow.cpp",
+  "output": "CMakeFiles/ImageTool.dir/src/MainWindow.cpp.obj"
+}
+]
